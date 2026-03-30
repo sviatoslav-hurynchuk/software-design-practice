@@ -88,78 +88,72 @@ namespace Lab3.Task5_6
         }
     }
 
+    public interface IImageLoadStrategy
+    {
+        void Load(string href);
+    }
+
+    public class NetworkLoadStrategy : IImageLoadStrategy
+    {
+        public void Load(string href)
+        {
+            Console.WriteLine($"[Мережа]: Завантаження картинки по HTTP з адреси -> {href}");
+        }
+    }
+
+    public class FileSystemLoadStrategy : IImageLoadStrategy
+    {
+        public void Load(string href)
+        {
+            Console.WriteLine($"[Файлова система]: Читання локального файлу з шляху -> {href}");
+        }
+    }
+
+    public class LightImageNode : LightNode
+    {
+        public string Href { get; }
+        private readonly IImageLoadStrategy _loadStrategy;
+
+        public LightImageNode(string href)
+        {
+            Href = href;
+
+            if (href.StartsWith("http://") || href.StartsWith("https://"))
+            {
+                _loadStrategy = new NetworkLoadStrategy();
+            }
+            else
+            {
+                _loadStrategy = new FileSystemLoadStrategy();
+            }
+        }
+
+        public override string InnerHTML => "";
+
+        public override string OuterHTML
+        {
+            get
+            {
+                _loadStrategy.Load(Href);
+                return $"<img src=\"{Href}\" />";
+            }
+        }
+    }
+
+
     public static class Task5_6Demo
     {
         public static void Run()
         {
-            Console.WriteLine("=== Завдання 5: Компонувальник ===");
+            Console.WriteLine("\n=== Завдання 4: Стратегія ===");
 
-            var table = new LightElementNode("table", "block", "paired");
-            var tr = new LightElementNode("tr", "block", "paired");
-            var th1 = new LightElementNode("th", "inline", "paired", new List<string> { "header-cell" });
-            th1.Add(new LightTextNode("Ім'я"));
-            var th2 = new LightElementNode("th", "inline", "paired", new List<string> { "header-cell" });
-            th2.Add(new LightTextNode("Вік"));
+            var localImage = new LightImageNode("C:\\images\\avatar.png");
+            Console.WriteLine(localImage.OuterHTML);
 
-            tr.Add(th1);
-            tr.Add(th2);
-            table.Add(tr);
+            Console.WriteLine();
 
-            Console.WriteLine(table.OuterHTML);
-
-            Console.WriteLine("\n=== Завдання 6: Легковаговик ===");
-
-            string[] bookLines = {
-                "ACT V",
-                "Scene I. Mantua. A Street.",
-                "Scene II. Friar Lawrence's Cell.",
-                "Scene III. A churchyard; in it a Monument belonging to the Capulets",
-                "Dramatis Personæ",
-                "ESCALUS, Prince of Verona.",
-                "MERCUTIO, kinsman to the Prince, and friend to Romeo.",
-                "PARIS, a young Nobleman, kinsman to the Prince.",
-                " Page to Paris."
-            };
-
-            GC.Collect();
-            long memoryBefore = GC.GetTotalMemory(true);
-
-            var document = new LightElementNode("div", "block", "paired");
-
-            for (int i = 0; i < 10000; i++)
-            {
-                bool isFirstLine = true;
-                foreach (var line in bookLines)
-                {
-                    LightElementNode node;
-                    if (isFirstLine)
-                    {
-                        node = new LightElementNode("h1", "block", "paired");
-                        isFirstLine = false;
-                    }
-                    else if (line.StartsWith(" "))
-                    {
-                        node = new LightElementNode("blockquote", "block", "paired");
-                    }
-                    else if (line.Length < 20)
-                    {
-                        node = new LightElementNode("h2", "block", "paired");
-                    }
-                    else
-                    {
-                        node = new LightElementNode("p", "block", "paired");
-                    }
-                    node.Add(new LightTextNode(line));
-                    document.Add(node);
-                }
-            }
-
-            GC.Collect();
-            long memoryAfter = GC.GetTotalMemory(true);
-
-            Console.WriteLine($"Згенеровано вузлів: {document.Children.Count}");
-            Console.WriteLine($"Унікальних станів (Flyweight) у пам'яті: {ElementStateFactory.StatesCount}");
-            Console.WriteLine($"Використано пам'яті: {(memoryAfter - memoryBefore) / 1024.0 / 1024.0:F2} MB");
+            var networkImage = new LightImageNode("https://example.com/banner.jpg");
+            Console.WriteLine(networkImage.OuterHTML);
         }
     }
 }

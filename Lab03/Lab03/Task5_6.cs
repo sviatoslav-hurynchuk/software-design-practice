@@ -60,16 +60,45 @@ namespace Lab3.Task5_6
         public List<string> CssClasses { get; }
         public List<LightNode> Children { get; }
 
+        private readonly Dictionary<string, List<Action>> _eventListeners;
+
         public LightElementNode(string tagName, string displayType, string closingType, List<string> cssClasses = null)
         {
             _state = ElementStateFactory.GetState(tagName, displayType, closingType);
             CssClasses = cssClasses ?? new List<string>();
             Children = new List<LightNode>();
+
+            _eventListeners = new Dictionary<string, List<Action>>();
         }
 
         public void Add(LightNode node)
         {
             Children.Add(node);
+        }
+
+        public void AddEventListener(string eventType, Action listener)
+        {
+            if (!_eventListeners.ContainsKey(eventType))
+            {
+                _eventListeners[eventType] = new List<Action>();
+            }
+            _eventListeners[eventType].Add(listener);
+        }
+
+        public void DispatchEvent(string eventType)
+        {
+            Console.WriteLine($"\n[Подія '{eventType}'] спрацювала на елементі <{_state.TagName}>");
+            if (_eventListeners.ContainsKey(eventType))
+            {
+                foreach (var listener in _eventListeners[eventType])
+                {
+                    listener.Invoke();
+                }
+            }
+            else
+            {
+                Console.WriteLine("-> Немає підписників на цю подію.");
+            }
         }
 
         public override string InnerHTML => string.Join("", Children.Select(c => c.OuterHTML));
@@ -92,74 +121,15 @@ namespace Lab3.Task5_6
     {
         public static void Run()
         {
-            Console.WriteLine("=== Завдання 5: Компонувальник ===");
+            Console.WriteLine("\n=== Завдання 5_6: Спостерігач ===");
+            var button = new LightElementNode("button", "inline", "paired");
+            button.Add(new LightTextNode("Натисни мене"));
 
-            var table = new LightElementNode("table", "block", "paired");
-            var tr = new LightElementNode("tr", "block", "paired");
-            var th1 = new LightElementNode("th", "inline", "paired", new List<string> { "header-cell" });
-            th1.Add(new LightTextNode("Ім'я"));
-            var th2 = new LightElementNode("th", "inline", "paired", new List<string> { "header-cell" });
-            th2.Add(new LightTextNode("Вік"));
+            button.AddEventListener("click", () => Console.WriteLine("Обробник 1: Кнопку натиснуто!"));
+            button.AddEventListener("mouseover", () => Console.WriteLine("Обробник 2: Колір змінено на червоний."));
 
-            tr.Add(th1);
-            tr.Add(th2);
-            table.Add(tr);
-
-            Console.WriteLine(table.OuterHTML);
-
-            Console.WriteLine("\n=== Завдання 6: Легковаговик ===");
-
-            string[] bookLines = {
-                "ACT V",
-                "Scene I. Mantua. A Street.",
-                "Scene II. Friar Lawrence's Cell.",
-                "Scene III. A churchyard; in it a Monument belonging to the Capulets",
-                "Dramatis Personæ",
-                "ESCALUS, Prince of Verona.",
-                "MERCUTIO, kinsman to the Prince, and friend to Romeo.",
-                "PARIS, a young Nobleman, kinsman to the Prince.",
-                " Page to Paris."
-            };
-
-            GC.Collect();
-            long memoryBefore = GC.GetTotalMemory(true);
-
-            var document = new LightElementNode("div", "block", "paired");
-
-            for (int i = 0; i < 10000; i++)
-            {
-                bool isFirstLine = true;
-                foreach (var line in bookLines)
-                {
-                    LightElementNode node;
-                    if (isFirstLine)
-                    {
-                        node = new LightElementNode("h1", "block", "paired");
-                        isFirstLine = false;
-                    }
-                    else if (line.StartsWith(" "))
-                    {
-                        node = new LightElementNode("blockquote", "block", "paired");
-                    }
-                    else if (line.Length < 20)
-                    {
-                        node = new LightElementNode("h2", "block", "paired");
-                    }
-                    else
-                    {
-                        node = new LightElementNode("p", "block", "paired");
-                    }
-                    node.Add(new LightTextNode(line));
-                    document.Add(node);
-                }
-            }
-
-            GC.Collect();
-            long memoryAfter = GC.GetTotalMemory(true);
-
-            Console.WriteLine($"Згенеровано вузлів: {document.Children.Count}");
-            Console.WriteLine($"Унікальних станів (Flyweight) у пам'яті: {ElementStateFactory.StatesCount}");
-            Console.WriteLine($"Використано пам'яті: {(memoryAfter - memoryBefore) / 1024.0 / 1024.0:F2} MB");
+            button.DispatchEvent("mouseover");
+            button.DispatchEvent("click");
         }
     }
 }

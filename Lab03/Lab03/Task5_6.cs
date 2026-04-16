@@ -4,25 +4,25 @@ using System.Linq;
 
 namespace Lab3.Task5_6
 {
+    // Base Component
     public abstract class LightNode
     {
         public abstract string OuterHTML { get; }
         public abstract string InnerHTML { get; }
     }
 
+    // Leaf Component
     public class LightTextNode : LightNode
     {
         private readonly string _text;
 
-        public LightTextNode(string text)
-        {
-            _text = text;
-        }
+        public LightTextNode(string text) => _text = text;
 
         public override string OuterHTML => _text;
         public override string InnerHTML => _text;
     }
 
+    // Flyweight State
     public class ElementState
     {
         public string TagName { get; }
@@ -37,6 +37,7 @@ namespace Lab3.Task5_6
         }
     }
 
+    // Flyweight Factory
     public class ElementStateFactory
     {
         private static readonly Dictionary<string, ElementState> _states = new Dictionary<string, ElementState>();
@@ -54,9 +55,11 @@ namespace Lab3.Task5_6
         public static int StatesCount => _states.Count;
     }
 
+    // Composite Component + Template Method
     public class LightElementNode : LightNode
     {
         private readonly ElementState _state;
+        public string TagName => _state.TagName;
         public List<string> CssClasses { get; }
         public List<LightNode> Children { get; }
 
@@ -65,41 +68,70 @@ namespace Lab3.Task5_6
             _state = ElementStateFactory.GetState(tagName, displayType, closingType);
             CssClasses = cssClasses ?? new List<string>();
             Children = new List<LightNode>();
+
+            OnCreated(); // Hook call on creation
         }
 
         public void Add(LightNode node)
         {
             Children.Add(node);
+            OnInserted(node); // Hook call on child insertion
         }
 
         public override string InnerHTML => string.Join("", Children.Select(c => c.OuterHTML));
 
-        public override string OuterHTML
+        // Property now calls the Template Method
+        public override string OuterHTML => Render();
+
+        // Template Method defining the skeleton of rendering
+        private string Render()
         {
-            get
+            string classes = "";
+            if (CssClasses.Count > 0)
             {
-                string classes = CssClasses.Count > 0 ? $" class=\"{string.Join(" ", CssClasses)}\"" : "";
-                if (_state.ClosingType == "single")
-                {
-                    return $"<{_state.TagName}{classes} />";
-                }
-                return $"<{_state.TagName}{classes}>{InnerHTML}</{_state.TagName}>";
+                OnClassListApplied(); // Hook call before classes are applied
+                classes = $" class=\"{string.Join(" ", CssClasses)}\"";
             }
+
+            string result = _state.ClosingType == "single"
+                ? $"<{_state.TagName}{classes} />"
+                : $"<{_state.TagName}{classes}>{InnerHTML}</{_state.TagName}>";
+
+            OnRendered(); // Hook call after rendering
+            return result;
         }
+
+        // --- Lifecycle Hooks ---
+        protected virtual void OnCreated() { }
+        protected virtual void OnInserted(LightNode node) { }
+        protected virtual void OnClassListApplied() { }
+        protected virtual void OnRendered() { }
+    }
+
+    // Concrete element testing Template Method hooks
+    public class TrackedElementNode : LightElementNode
+    {
+        public TrackedElementNode(string tagName, string displayType, string closingType, List<string> cssClasses = null)
+            : base(tagName, displayType, closingType, cssClasses) { }
+
+        protected override void OnCreated() => Console.WriteLine($"[Hook] Created <{TagName}>");
+        protected override void OnInserted(LightNode node) => Console.WriteLine($"[Hook] Child inserted into <{TagName}>");
+        protected override void OnClassListApplied() => Console.WriteLine($"[Hook] Applied {CssClasses.Count} classes to <{TagName}>");
+        protected override void OnRendered() => Console.WriteLine($"[Hook] Rendered <{TagName}>");
     }
 
     public static class Task5_6Demo
     {
         public static void Run()
         {
-            Console.WriteLine("=== Завдання 5: Компонувальник ===");
+            Console.WriteLine("=== Task 5 & 6: Composite & Flyweight ===");
 
             var table = new LightElementNode("table", "block", "paired");
             var tr = new LightElementNode("tr", "block", "paired");
             var th1 = new LightElementNode("th", "inline", "paired", new List<string> { "header-cell" });
-            th1.Add(new LightTextNode("Ім'я"));
+            th1.Add(new LightTextNode("Name"));
             var th2 = new LightElementNode("th", "inline", "paired", new List<string> { "header-cell" });
-            th2.Add(new LightTextNode("Вік"));
+            th2.Add(new LightTextNode("Age"));
 
             tr.Add(th1);
             tr.Add(th2);
@@ -107,7 +139,7 @@ namespace Lab3.Task5_6
 
             Console.WriteLine(table.OuterHTML);
 
-            Console.WriteLine("\n=== Завдання 6: Легковаговик ===");
+            Console.WriteLine("\n=== Flyweight Performance Test ===");
 
             string[] bookLines = {
                 "ACT V",
@@ -157,9 +189,15 @@ namespace Lab3.Task5_6
             GC.Collect();
             long memoryAfter = GC.GetTotalMemory(true);
 
-            Console.WriteLine($"Згенеровано вузлів: {document.Children.Count}");
-            Console.WriteLine($"Унікальних станів (Flyweight) у пам'яті: {ElementStateFactory.StatesCount}");
-            Console.WriteLine($"Використано пам'яті: {(memoryAfter - memoryBefore) / 1024.0 / 1024.0:F2} MB");
+            Console.WriteLine($"Generated nodes: {document.Children.Count}");
+            Console.WriteLine($"Unique states (Flyweight) in memory: {ElementStateFactory.StatesCount}");
+            Console.WriteLine($"Memory used: {(memoryAfter - memoryBefore) / 1024.0 / 1024.0:F2} MB");
+
+            Console.WriteLine("\n=== Template Method (Hooks) Test ===");
+            var trackedDiv = new TrackedElementNode("div", "block", "paired", new List<string> { "container", "active" });
+            trackedDiv.Add(new LightTextNode("Inner text"));
+            string html = trackedDiv.OuterHTML;
+            Console.WriteLine($"\nResult:\n{html}\n");
         }
     }
 }

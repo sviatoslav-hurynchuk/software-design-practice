@@ -1,28 +1,86 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace Lab3.Task5_6
 {
+    // Visitor Interface
+    public interface IVisitor
+    {
+        void Visit(LightElementNode element);
+        void Visit(LightTextNode text);
+    }
+
+    // Concrete Visitor 1: Extracts pure text without tags
+    public class PlainTextVisitor : IVisitor
+    {
+        private readonly StringBuilder _textBuilder = new StringBuilder();
+
+        public string GetPlainText() => _textBuilder.ToString().Trim();
+
+        public void Visit(LightElementNode element)
+        {
+            if (element.TagName == "p" || element.TagName == "h1" || element.TagName == "h2")
+            {
+                _textBuilder.AppendLine();
+            }
+        }
+
+        public void Visit(LightTextNode text)
+        {
+            _textBuilder.Append(text.InnerHTML).Append(" ");
+        }
+    }
+
+    // Concrete Visitor 2: Counts specific tags
+    public class TagCountVisitor : IVisitor
+    {
+        private readonly string _targetTag;
+        public int Count { get; private set; }
+
+        public TagCountVisitor(string targetTag)
+        {
+            _targetTag = targetTag;
+            Count = 0;
+        }
+
+        public void Visit(LightElementNode element)
+        {
+            if (element.TagName == _targetTag)
+            {
+                Count++;
+            }
+        }
+
+        public void Visit(LightTextNode text) { }
+    }
+
+    // Base Component
     public abstract class LightNode
     {
         public abstract string OuterHTML { get; }
         public abstract string InnerHTML { get; }
+
+        // Added for Visitor Pattern
+        public abstract void Accept(IVisitor visitor);
     }
 
+    // Leaf Component
     public class LightTextNode : LightNode
     {
         private readonly string _text;
 
-        public LightTextNode(string text)
-        {
-            _text = text;
-        }
+        public LightTextNode(string text) => _text = text;
 
         public override string OuterHTML => _text;
         public override string InnerHTML => _text;
+
+        // Added for Visitor Pattern
+        public override void Accept(IVisitor visitor) => visitor.Visit(this);
     }
 
+    // Flyweight State
     public class ElementState
     {
         public string TagName { get; }
@@ -37,6 +95,7 @@ namespace Lab3.Task5_6
         }
     }
 
+    // Flyweight Factory
     public class ElementStateFactory
     {
         private static readonly Dictionary<string, ElementState> _states = new Dictionary<string, ElementState>();
@@ -54,9 +113,11 @@ namespace Lab3.Task5_6
         public static int StatesCount => _states.Count;
     }
 
+    // Composite Component
     public class LightElementNode : LightNode
     {
         private readonly ElementState _state;
+        public string TagName => _state.TagName; // Exposed for visitors
         public List<string> CssClasses { get; }
         public List<LightNode> Children { get; }
 
@@ -67,9 +128,16 @@ namespace Lab3.Task5_6
             Children = new List<LightNode>();
         }
 
-        public void Add(LightNode node)
+        public void Add(LightNode node) => Children.Add(node);
+
+        // Added for Visitor Pattern
+        public override void Accept(IVisitor visitor)
         {
-            Children.Add(node);
+            visitor.Visit(this);
+            foreach (var child in Children)
+            {
+                child.Accept(visitor);
+            }
         }
 
         public override string InnerHTML => string.Join("", Children.Select(c => c.OuterHTML));
@@ -88,18 +156,19 @@ namespace Lab3.Task5_6
         }
     }
 
+    // Demo execution
     public static class Task5_6Demo
     {
         public static void Run()
         {
-            Console.WriteLine("=== Завдання 5: Компонувальник ===");
+            Console.WriteLine("=== Task 5: Composite ===");
 
             var table = new LightElementNode("table", "block", "paired");
             var tr = new LightElementNode("tr", "block", "paired");
             var th1 = new LightElementNode("th", "inline", "paired", new List<string> { "header-cell" });
-            th1.Add(new LightTextNode("Ім'я"));
+            th1.Add(new LightTextNode("Name"));
             var th2 = new LightElementNode("th", "inline", "paired", new List<string> { "header-cell" });
-            th2.Add(new LightTextNode("Вік"));
+            th2.Add(new LightTextNode("Age"));
 
             tr.Add(th1);
             tr.Add(th2);
@@ -107,7 +176,7 @@ namespace Lab3.Task5_6
 
             Console.WriteLine(table.OuterHTML);
 
-            Console.WriteLine("\n=== Завдання 6: Легковаговик ===");
+            Console.WriteLine("\n=== Task 6: Flyweight ===");
 
             string[] bookLines = {
                 "ACT V",
@@ -157,9 +226,44 @@ namespace Lab3.Task5_6
             GC.Collect();
             long memoryAfter = GC.GetTotalMemory(true);
 
-            Console.WriteLine($"Згенеровано вузлів: {document.Children.Count}");
-            Console.WriteLine($"Унікальних станів (Flyweight) у пам'яті: {ElementStateFactory.StatesCount}");
-            Console.WriteLine($"Використано пам'яті: {(memoryAfter - memoryBefore) / 1024.0 / 1024.0:F2} MB");
+            Console.WriteLine($"Generated nodes: {document.Children.Count}");
+            Console.WriteLine($"Unique states (Flyweight) in memory: {ElementStateFactory.StatesCount}");
+            Console.WriteLine($"Memory used: {(memoryAfter - memoryBefore) / 1024.0 / 1024.0:F2} MB");
+
+            Console.WriteLine("\n=== Visitor Pattern Test ===");
+
+            var visitorDoc = new LightElementNode("html", "block", "paired");
+            var vBody = new LightElementNode("body", "block", "paired");
+            var vH1 = new LightElementNode("h1", "block", "paired");
+            vH1.Add(new LightTextNode("Title of the page"));
+
+            var vDiv = new LightElementNode("div", "block", "paired");
+            var vP1 = new LightElementNode("p", "block", "paired");
+            vP1.Add(new LightTextNode("First paragraph text."));
+            var vP2 = new LightElementNode("p", "block", "paired");
+            vP2.Add(new LightTextNode("Second paragraph text."));
+
+            vDiv.Add(vP1);
+            vDiv.Add(vP2);
+            vBody.Add(vH1);
+            vBody.Add(vDiv);
+            visitorDoc.Add(vBody);
+
+            // Test 1: Plain Text Extraction
+            var textVisitor = new PlainTextVisitor();
+            visitorDoc.Accept(textVisitor);
+            Console.WriteLine("--- Plain Text Extracted ---");
+            Console.WriteLine(textVisitor.GetPlainText());
+
+            // Test 2: Tag Counting
+            var pCounter = new TagCountVisitor("p");
+            var divCounter = new TagCountVisitor("div");
+            visitorDoc.Accept(pCounter);
+            visitorDoc.Accept(divCounter);
+
+            Console.WriteLine("\n--- Tag Counts ---");
+            Console.WriteLine($"Paragraphs (<p>) found: {pCounter.Count}");
+            Console.WriteLine($"Divs (<div>) found: {divCounter.Count}");
         }
     }
 }

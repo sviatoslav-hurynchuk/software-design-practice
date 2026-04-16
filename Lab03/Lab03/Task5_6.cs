@@ -4,25 +4,29 @@ using System.Linq;
 
 namespace Lab3.Task5_6
 {
+    // Base Component
     public abstract class LightNode
     {
         public abstract string OuterHTML { get; }
         public abstract string InnerHTML { get; }
+
+        // Iterator factory methods
+        public IEnumerator<LightNode> GetDepthFirstIterator() => new DepthFirstIterator(this);
+        public IEnumerator<LightNode> GetBreadthFirstIterator() => new BreadthFirstIterator(this);
     }
 
+    // Leaf Component
     public class LightTextNode : LightNode
     {
         private readonly string _text;
 
-        public LightTextNode(string text)
-        {
-            _text = text;
-        }
+        public LightTextNode(string text) => _text = text;
 
         public override string OuterHTML => _text;
         public override string InnerHTML => _text;
     }
 
+    // Flyweight State
     public class ElementState
     {
         public string TagName { get; }
@@ -37,6 +41,7 @@ namespace Lab3.Task5_6
         }
     }
 
+    // Flyweight Factory
     public class ElementStateFactory
     {
         private static readonly Dictionary<string, ElementState> _states = new Dictionary<string, ElementState>();
@@ -54,9 +59,11 @@ namespace Lab3.Task5_6
         public static int StatesCount => _states.Count;
     }
 
+    // Composite Component + Template Method
     public class LightElementNode : LightNode
     {
         private readonly ElementState _state;
+        public string TagName => _state.TagName;
         public List<string> CssClasses { get; }
         public List<LightNode> Children { get; }
 
@@ -65,41 +72,151 @@ namespace Lab3.Task5_6
             _state = ElementStateFactory.GetState(tagName, displayType, closingType);
             CssClasses = cssClasses ?? new List<string>();
             Children = new List<LightNode>();
+
+            OnCreated();
         }
 
         public void Add(LightNode node)
         {
             Children.Add(node);
+            OnInserted(node);
         }
 
         public override string InnerHTML => string.Join("", Children.Select(c => c.OuterHTML));
+        public override string OuterHTML => Render();
 
-        public override string OuterHTML
+        // Template Method defining the skeleton of rendering
+        private string Render()
         {
-            get
+            string classes = "";
+            if (CssClasses.Count > 0)
             {
-                string classes = CssClasses.Count > 0 ? $" class=\"{string.Join(" ", CssClasses)}\"" : "";
-                if (_state.ClosingType == "single")
-                {
-                    return $"<{_state.TagName}{classes} />";
-                }
-                return $"<{_state.TagName}{classes}>{InnerHTML}</{_state.TagName}>";
+                OnClassListApplied();
+                classes = $" class=\"{string.Join(" ", CssClasses)}\"";
             }
+
+            string result = _state.ClosingType == "single"
+                ? $"<{_state.TagName}{classes} />"
+                : $"<{_state.TagName}{classes}>{InnerHTML}</{_state.TagName}>";
+
+            OnRendered();
+            return result;
         }
+
+        // Lifecycle Hooks
+        protected virtual void OnCreated() { }
+        protected virtual void OnInserted(LightNode node) { }
+        protected virtual void OnClassListApplied() { }
+        protected virtual void OnRendered() { }
     }
 
+    // Concrete element testing Template Method hooks
+    public class TrackedElementNode : LightElementNode
+    {
+        public TrackedElementNode(string tagName, string displayType, string closingType, List<string> cssClasses = null)
+            : base(tagName, displayType, closingType, cssClasses) { }
+
+        protected override void OnCreated() => Console.WriteLine($"[Hook] Created <{TagName}>");
+        protected override void OnInserted(LightNode node) => Console.WriteLine($"[Hook] Child inserted into <{TagName}>");
+        protected override void OnClassListApplied() => Console.WriteLine($"[Hook] Applied {CssClasses.Count} classes to <{TagName}>");
+        protected override void OnRendered() => Console.WriteLine($"[Hook] Rendered <{TagName}>");
+    }
+
+    // DFS Iterator
+    public class DepthFirstIterator : IEnumerator<LightNode>
+    {
+        private readonly LightNode _root;
+        private Stack<LightNode> _stack;
+
+        public LightNode Current { get; private set; }
+        object System.Collections.IEnumerator.Current => Current;
+
+        public DepthFirstIterator(LightNode root)
+        {
+            _root = root;
+            Reset();
+        }
+
+        public bool MoveNext()
+        {
+            if (_stack.Count == 0) return false;
+
+            Current = _stack.Pop();
+
+            if (Current is LightElementNode elementNode)
+            {
+                for (int i = elementNode.Children.Count - 1; i >= 0; i--)
+                {
+                    _stack.Push(elementNode.Children[i]);
+                }
+            }
+            return true;
+        }
+
+        public void Reset()
+        {
+            _stack = new Stack<LightNode>();
+            _stack.Push(_root);
+            Current = null;
+        }
+
+        public void Dispose() { }
+    }
+
+    // BFS Iterator
+    public class BreadthFirstIterator : IEnumerator<LightNode>
+    {
+        private readonly LightNode _root;
+        private Queue<LightNode> _queue;
+
+        public LightNode Current { get; private set; }
+        object System.Collections.IEnumerator.Current => Current;
+
+        public BreadthFirstIterator(LightNode root)
+        {
+            _root = root;
+            Reset();
+        }
+
+        public bool MoveNext()
+        {
+            if (_queue.Count == 0) return false;
+
+            Current = _queue.Dequeue();
+
+            if (Current is LightElementNode elementNode)
+            {
+                foreach (var child in elementNode.Children)
+                {
+                    _queue.Enqueue(child);
+                }
+            }
+            return true;
+        }
+
+        public void Reset()
+        {
+            _queue = new Queue<LightNode>();
+            _queue.Enqueue(_root);
+            Current = null;
+        }
+
+        public void Dispose() { }
+    }
+
+    // Demo execution
     public static class Task5_6Demo
     {
         public static void Run()
         {
-            Console.WriteLine("=== Завдання 5: Компонувальник ===");
+            Console.WriteLine("=== Task 5 & 6: Composite & Flyweight ===");
 
             var table = new LightElementNode("table", "block", "paired");
             var tr = new LightElementNode("tr", "block", "paired");
             var th1 = new LightElementNode("th", "inline", "paired", new List<string> { "header-cell" });
-            th1.Add(new LightTextNode("Ім'я"));
+            th1.Add(new LightTextNode("Name"));
             var th2 = new LightElementNode("th", "inline", "paired", new List<string> { "header-cell" });
-            th2.Add(new LightTextNode("Вік"));
+            th2.Add(new LightTextNode("Age"));
 
             tr.Add(th1);
             tr.Add(th2);
@@ -107,59 +224,35 @@ namespace Lab3.Task5_6
 
             Console.WriteLine(table.OuterHTML);
 
-            Console.WriteLine("\n=== Завдання 6: Легковаговик ===");
+            Console.WriteLine("\n=== Template Method (Hooks) ===");
+            var trackedDiv = new TrackedElementNode("div", "block", "paired", new List<string> { "container", "active" });
+            trackedDiv.Add(new LightTextNode("Inner text"));
+            string html = trackedDiv.OuterHTML;
+            Console.WriteLine($"\nResult:\n{html}\n");
 
-            string[] bookLines = {
-                "ACT V",
-                "Scene I. Mantua. A Street.",
-                "Scene II. Friar Lawrence's Cell.",
-                "Scene III. A churchyard; in it a Monument belonging to the Capulets",
-                "Dramatis Personæ",
-                "ESCALUS, Prince of Verona.",
-                "MERCUTIO, kinsman to the Prince, and friend to Romeo.",
-                "PARIS, a young Nobleman, kinsman to the Prince.",
-                " Page to Paris."
-            };
+            Console.WriteLine("=== Iterators (DFS & BFS) ===");
+            var htmlDoc = new LightElementNode("html", "block", "paired");
+            var head = new LightElementNode("head", "block", "paired");
+            var body = new LightElementNode("body", "block", "paired");
+            htmlDoc.Add(head);
+            htmlDoc.Add(body);
+            head.Add(new LightElementNode("title", "inline", "paired"));
+            body.Add(new LightElementNode("h1", "block", "paired"));
+            body.Add(new LightElementNode("p", "block", "paired"));
 
-            GC.Collect();
-            long memoryBefore = GC.GetTotalMemory(true);
-
-            var document = new LightElementNode("div", "block", "paired");
-
-            for (int i = 0; i < 10000; i++)
+            Console.WriteLine("--- Depth-First Search ---");
+            var dfs = htmlDoc.GetDepthFirstIterator();
+            while (dfs.MoveNext())
             {
-                bool isFirstLine = true;
-                foreach (var line in bookLines)
-                {
-                    LightElementNode node;
-                    if (isFirstLine)
-                    {
-                        node = new LightElementNode("h1", "block", "paired");
-                        isFirstLine = false;
-                    }
-                    else if (line.StartsWith(" "))
-                    {
-                        node = new LightElementNode("blockquote", "block", "paired");
-                    }
-                    else if (line.Length < 20)
-                    {
-                        node = new LightElementNode("h2", "block", "paired");
-                    }
-                    else
-                    {
-                        node = new LightElementNode("p", "block", "paired");
-                    }
-                    node.Add(new LightTextNode(line));
-                    document.Add(node);
-                }
+                if (dfs.Current is LightElementNode el) Console.WriteLine($"Tag: <{el.TagName}>");
             }
 
-            GC.Collect();
-            long memoryAfter = GC.GetTotalMemory(true);
-
-            Console.WriteLine($"Згенеровано вузлів: {document.Children.Count}");
-            Console.WriteLine($"Унікальних станів (Flyweight) у пам'яті: {ElementStateFactory.StatesCount}");
-            Console.WriteLine($"Використано пам'яті: {(memoryAfter - memoryBefore) / 1024.0 / 1024.0:F2} MB");
+            Console.WriteLine("\n--- Breadth-First Search ---");
+            var bfs = htmlDoc.GetBreadthFirstIterator();
+            while (bfs.MoveNext())
+            {
+                if (bfs.Current is LightElementNode el) Console.WriteLine($"Tag: <{el.TagName}>");
+            }
         }
     }
 }

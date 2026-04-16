@@ -57,6 +57,7 @@ namespace Lab3.Task5_6
     public class LightElementNode : LightNode
     {
         private readonly ElementState _state;
+        public string TagName => _state.TagName;
         public List<string> CssClasses { get; }
         public List<LightNode> Children { get; }
 
@@ -65,26 +66,79 @@ namespace Lab3.Task5_6
             _state = ElementStateFactory.GetState(tagName, displayType, closingType);
             CssClasses = cssClasses ?? new List<string>();
             Children = new List<LightNode>();
+
+            OnCreated(); // Виклик хука при створенні
         }
 
         public void Add(LightNode node)
         {
             Children.Add(node);
+            OnInserted(node); // Виклик хука при додаванні дитини
         }
 
         public override string InnerHTML => string.Join("", Children.Select(c => c.OuterHTML));
 
-        public override string OuterHTML
+        // Властивість тепер просто викликає наш Шаблонний Метод
+        public override string OuterHTML => Render();
+
+        // ТЕЙ САМИЙ ШАБЛОННИЙ МЕТОД (Template Method)
+        // Він жорстко задає алгоритм формування HTML
+        private string Render()
         {
-            get
+            string classes = "";
+            if (CssClasses.Count > 0)
             {
-                string classes = CssClasses.Count > 0 ? $" class=\"{string.Join(" ", CssClasses)}\"" : "";
-                if (_state.ClosingType == "single")
-                {
-                    return $"<{_state.TagName}{classes} />";
-                }
-                return $"<{_state.TagName}{classes}>{InnerHTML}</{_state.TagName}>";
+                OnClassListApplied(); // Хук перед застосуванням класів
+                classes = $" class=\"{string.Join(" ", CssClasses)}\"";
             }
+
+            string result;
+            if (_state.ClosingType == "single")
+            {
+                result = $"<{_state.TagName}{classes} />";
+            }
+            else
+            {
+                result = $"<{_state.TagName}{classes}>{InnerHTML}</{_state.TagName}>";
+            }
+
+            OnRendered(); // Хук після генерації розмітки
+            return result;
+        }
+
+        // --- ХУКИ ЖИТТЄВОГО ЦИКЛУ (Lifecycle Hooks) ---
+        protected virtual void OnCreated() { }
+        protected virtual void OnInserted(LightNode node) { }
+        protected virtual void OnClassListApplied() { }
+        protected virtual void OnRendered() { }
+    }
+
+    // Конкретний елемент, який використовує хуки Шаблонного методу
+    public class TrackedElementNode : LightElementNode
+    {
+        public TrackedElementNode(string tagName, string displayType, string closingType, List<string> cssClasses = null)
+            : base(tagName, displayType, closingType, cssClasses)
+        {
+        }
+
+        protected override void OnCreated()
+        {
+            Console.WriteLine($"[Hook] Елемент <{this.TagName}> було створено.");
+        }
+
+        protected override void OnInserted(LightNode node)
+        {
+            Console.WriteLine($"[Hook] У елемент додано нового нащадка.");
+        }
+
+        protected override void OnClassListApplied()
+        {
+            Console.WriteLine($"[Hook] До елемента застосовано {CssClasses.Count} CSS класів.");
+        }
+
+        protected override void OnRendered()
+        {
+            Console.WriteLine($"[Hook] Елемент успішно відрендерився у рядок.");
         }
     }
 
@@ -160,6 +214,13 @@ namespace Lab3.Task5_6
             Console.WriteLine($"Згенеровано вузлів: {document.Children.Count}");
             Console.WriteLine($"Унікальних станів (Flyweight) у пам'яті: {ElementStateFactory.StatesCount}");
             Console.WriteLine($"Використано пам'яті: {(memoryAfter - memoryBefore) / 1024.0 / 1024.0:F2} MB");
+            
+            
+            Console.WriteLine("=== Перевірка Шаблонного методу (Хуки) ===");
+            var trackedDiv = new TrackedElementNode("div", "block", "paired", new List<string> { "container", "active" });
+            trackedDiv.Add(new LightTextNode("Текст всередині"));
+            string html = trackedDiv.OuterHTML;
+            Console.WriteLine($"\nРезультат: {html}\n");
         }
     }
 }

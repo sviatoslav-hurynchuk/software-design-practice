@@ -13,12 +13,12 @@ namespace Lab3
         {
             Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-            Task1Demo.Run();
+            //Task1Demo.Run();
 
-            Task2Demo.Run();
+            //Task2Demo.Run();
 
-            Task3Demo.Run();
-            Task4Demo.Run();
+            //Task3Demo.Run();
+            //Task4Demo.Run();
             Task5_6Demo.Run();
 
             Console.WriteLine("Натисніть будь-яку клавішу для завершення...");
